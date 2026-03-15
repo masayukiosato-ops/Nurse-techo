@@ -430,7 +430,13 @@ textarea { resize:vertical; line-height:1.75; }
           <div class="page-title">実習記録一覧</div>
           <div class="page-sub">これまでの記録・SOAPを確認できます</div>
         </div>
-        <button class="btn btn-primary" onclick="nav('new')">＋ 新規記録</button>
+        <div style="display:flex;gap:.6rem;">
+          <button class="btn btn-outline btn-sm" onclick="exportAllTxt()" style="display:flex;align-items:center;gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            全件エクスポート
+          </button>
+          <button class="btn btn-primary" onclick="nav('new')">＋ 新規記録</button>
+        </div>
       </div>
       <div class="stats-bar" id="statsBar"></div>
       <div id="recordList"></div>
@@ -809,7 +815,7 @@ ${document.getElementById('soapS').value||'（未入力）'}
 難しい医療用語には簡単な説明を添えてください。`;
 
   try {
-    const text = await callAI(prompt, 1000);
+    const text = await callAI(prompt, 3000);
     resultEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(text)}</div>`;
   } catch(e) {
     resultEl.innerHTML = `<span style="color:#c17f5a">${escHtml(e.message||'通信エラーが発生しました。再度お試しください。')}</span>`;
@@ -852,7 +858,7 @@ O：${document.getElementById('soapO').value||'未入力'}
 最後に「※この計画案はあくまでも参考です。患者の状況に応じて、指導者と相談しながら修正してください。」と記載してください。`;
 
   try {
-    const text = await callAI(prompt, 900);
+    const text = await callAI(prompt, 3000);
     planEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(text)}</div>`;
   } catch(e) {
     planEl.innerHTML = `<span style="color:#c17f5a">${escHtml(e.message||'通信エラーが発生しました。')}</span>`;
@@ -985,6 +991,10 @@ function showDetail(id) {
         <button class="btn btn-edit btn-sm" onclick="startEdit(${id})">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           編集
+        </button>
+        <button class="btn btn-sm" style="background:#f0f7f2;color:#4a7d5a;border:1px solid #b0d4bc;" onclick="exportTxt(${id})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          TXT
         </button>
         <button class="btn btn-delete btn-sm" onclick="openDeleteModal(${id})">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
@@ -1289,7 +1299,7 @@ async function testConnection() {
 }
 
 // ===== 統一AI呼び出し関数 =====
-async function callAI(prompt, maxTokens = 1000) {
+async function callAI(prompt, maxTokens = 3000) {
   const { provider, model, apiKey } = aiSettings;
   if (!apiKey) throw new Error('APIキーが設定されていません。「AI設定」タブで設定してください。');
 
@@ -1354,6 +1364,93 @@ async function callAI(prompt, maxTokens = 1000) {
 }
 
 // ===== nav override for settings =====
+
+// ===== テキストエクスポート =====
+function recordToText(r) {
+  const d = fmtDate(r.date);
+  const sep = '─'.repeat(40);
+  const lines = [
+    '╔══════════════════════════════════════╗',
+    '　　　　ナース手帖　実習記録',
+    '╚══════════════════════════════════════╝',
+    '',
+    `【実習日】　${d.full}`,
+    `【実習科】　${r.dept || '—'}`,
+    `【テーマ】　${r.title || '—'}`,
+    '',
+    sep,
+    '■ 患者情報',
+    sep,
+    `年齢・性別　：${r.age ? r.age + '歳' : '—'} ${r.gender || ''}`,
+    `主疾患　　　：${r.disease || '—'}`,
+    `既往歴・合併：${r.history || '—'}`,
+    `入院目的・経：${r.admission || '—'}`,
+    '',
+    sep,
+    '■ SOAP記録',
+    sep,
+    '',
+    '【S：主観的データ（患者の言葉）】',
+    r.soapS || '（未記入）',
+    '',
+    '【O：客観的データ】',
+    r.soapVital ? '＜バイタルサイン＞\n' + r.soapVital : '',
+    r.soapPhysical ? '＜フィジカルアセスメント＞\n' + r.soapPhysical : '',
+    r.soapO || '（未記入）',
+    '',
+    '【A：アセスメント】',
+    r.soapA || '（未記入）',
+    '',
+    '【P：看護計画】',
+    r.soapP || '（未記入）',
+    '',
+    sep,
+    '■ 振り返り',
+    sep,
+    '',
+    '【学んだこと・気づき】',
+    r.learning || '—',
+    '',
+    '【明日への課題】',
+    r.issue || '—',
+    '',
+    sep,
+    `出力日時：${new Date().toLocaleString('ja-JP')}`,
+    '　　　　　ナース手帖 - 看護学生実習記録アプリ',
+  ];
+  return lines.filter(l => l !== null && l !== undefined).join('\n');
+}
+
+function exportTxt(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const text = recordToText(r);
+  const d = fmtDate(r.date);
+  const filename = `実習記録_${r.date}_${(r.dept || '').replace(/[/\\]/g, '-')}.txt`;
+  downloadText(text, filename);
+  showToast('テキストファイルを保存しました ✓');
+}
+
+function exportAllTxt() {
+  if (!records.length) { showToast('記録がありません'); return; }
+  const divider = '\n' + '═'.repeat(50) + '\n\n';
+  const text = records.map(r => recordToText(r)).join(divider);
+  const filename = `実習記録_全件_${new Date().toISOString().slice(0,10)}.txt`;
+  downloadText(text, filename);
+  showToast(`${records.length}件をエクスポートしました ✓`);
+}
+
+function downloadText(text, filename) {
+  const bom = '\uFEFF'; // BOM付きUTF-8（Windowsメモ帳対応）
+  const blob = new Blob([bom + text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 renderList();
 
 // ===== PWA: Service Worker (inline Blob) =====
