@@ -254,6 +254,77 @@ textarea { resize:vertical; line-height:1.75; }
 }
 .dev-hint.show { display:block; }
 
+/* ===== バイタルグリッド ===== */
+.vital-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .6rem;
+  margin-bottom: .2rem;
+}
+.vital-item {
+  background: var(--warm-white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: .6rem .7rem;
+}
+.vital-item-wide { grid-column: span 2; }
+.vital-label {
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--mid-gray);
+  letter-spacing: .04em;
+  margin-bottom: .35rem;
+}
+.vital-input-row {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.vital-input-row input {
+  flex: 1;
+  padding: .4rem .5rem;
+  font-size: .9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: white;
+  text-align: center;
+  min-width: 0;
+}
+.vital-input-row input:focus {
+  border-color: var(--sage-light);
+  box-shadow: 0 0 0 2px rgba(107,158,122,.12);
+}
+.vital-unit {
+  font-size: .68rem;
+  color: var(--mid-gray);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.vital-toggle-row {
+  display: flex;
+  gap: .35rem;
+}
+.vital-toggle {
+  flex: 1;
+  text-align: center;
+  padding: .35rem .4rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: white;
+  font-size: .76rem;
+  cursor: pointer;
+  transition: all .15s;
+  color: var(--mid-gray);
+}
+.vital-toggle.active-none { background: var(--sage-bg); border-color: var(--sage); color: var(--sage-dark); font-weight: 600; }
+.vital-toggle.active-warn { background: #fdeaea; border-color: #e74c3c; color: #c0392b; font-weight: 600; }
+@media (max-width: 768px) {
+  .vital-grid { grid-template-columns: repeat(2, 1fr); }
+  .vital-item-wide { grid-column: span 2; }
+}
+
+
 /* ===== 設定ページ ===== */
 .settings-section { margin-bottom: 1.5rem; }
 .settings-section-title {
@@ -541,11 +612,11 @@ textarea { resize:vertical; line-height:1.75; }
           <div class="form-row cols-2">
             <div class="form-group">
               <label>バイタルサイン</label>
-              <textarea id="soapVital" rows="4" placeholder="血圧：  /  mmHg&#10;脈拍：  /min　不整（有・無）&#10;体温：  ℃&#10;SpO2：  %（room air）&#10;呼吸数：  /min"></textarea>
+              <textarea id="soapVital" rows="5" placeholder="血圧：  /  mmHg&#10;脈拍：  /min　不整（有・無）&#10;体温：  ℃&#10;SpO2：  %（room air）&#10;呼吸数：  /min"></textarea>
             </div>
             <div class="form-group">
               <label>フィジカルアセスメント</label>
-              <textarea id="soapPhysical" rows="4" placeholder="皮膚：色・湿潤・浮腫&#10;呼吸音：清明 / 副雑音&#10;腸蠕動音：&#10;創部：発赤・滲出液&#10;意識：清明 / 混濁"></textarea>
+              <textarea id="soapPhysical" rows="5" placeholder="皮膚：色・湿潤・浮腫&#10;呼吸音：清明 / 副雑音&#10;腸蠕動音：&#10;創部：発赤・滲出液&#10;意識：清明 / 混濁"></textarea>
             </div>
           </div>
           <div class="form-group">
@@ -728,7 +799,7 @@ function nav(page) {
   const bnavEl = document.getElementById('bnav-' + (page === 'detail' ? 'list' : page));
   if(bnavEl) bnavEl.classList.add('active');
   if(page==='list') renderList();
-  if(page==='new') resetForm();
+  if(page==='new' && !currentEditId) resetForm();
   if(page==='settings') loadSettingsUI();
   window.scrollTo(0,0);
 }
@@ -786,37 +857,29 @@ async function runAssessment() {
 
   const dev = getDevStage(age);
   const resultEl = document.getElementById('aiResult');
-  resultEl.innerHTML = '<span class="spinner"></span>分析中...';
+  resultEl.innerHTML = '<span class="spinner"></span>分析中（1/2）...';
 
-  const prompt = `あなたは看護教育の専門家です。看護学生の実習アセスメントを支援してください。
+  const patientInfo = `${age}歳 ${selectedGender||''} 主疾患：${disease} 既往：${document.getElementById('inputHistory').value||'なし'} 経過：${document.getElementById('inputAdmission').value||''} 発達段階：${dev ? dev.stage : ''}`;
+  const sData = document.getElementById('soapS').value || '未入力';
+  const oData = `バイタル：${document.getElementById('soapVital').value||'未入力'} / フィジカル：${document.getElementById('soapPhysical').value||'未入力'} / その他：${document.getElementById('soapO').value||'未入力'}`;
 
-【患者情報】
-年齢：${age}歳　性別：${selectedGender||'不明'}
-主疾患：${disease}
-既往歴・合併症：${document.getElementById('inputHistory').value||'なし'}
-入院目的・経過：${document.getElementById('inputAdmission').value||'不明'}
-発達段階：${dev ? dev.stage : '不明'}（${dev ? dev.erikson : ''}）
+  const prompt1 = `看護学生の実習記録です。以下の情報をもとに【発達段階の留意点】と【疾患・病態のリスクと観察ポイント】を各2〜3文で簡潔に述べてください。
+患者：${patientInfo}
+S：${sData}
+O：${oData}`;
 
-【S（主観的データ）】
-${document.getElementById('soapS').value||'（未入力）'}
-
-【O（客観的データ）】
-バイタル：${document.getElementById('soapVital').value||'未入力'}
-フィジカル：${document.getElementById('soapPhysical').value||'未入力'}
-その他：${document.getElementById('soapO').value||'未入力'}
-
-以下4つの視点で、学生が自分でアセスメントを深められるよう教育的に分析してください。
-
-【1. 発達段階の特徴と看護上の留意点】（3〜4文）
-【2. 疾患・病態から想定されるリスクと観察ポイント】（3〜4文）
-【3. S・Oデータからの分析（症状の関連・気になる変化・優先問題）】（4〜5文）
-【4. アセスメントをまとめるためのヒント（学生へのガイド）】（2〜3文）
-
-難しい医療用語には簡単な説明を添えてください。`;
+  const prompt2 = `看護学生の実習記録です。以下のS・Oデータから【優先される問題と根拠】を2〜3文、【アセスメントのヒント】を2文で述べてください。
+患者：${patientInfo}
+S：${sData}
+O：${oData}`;
 
   try {
-    const text = await callAI(prompt, 3000);
-    resultEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(text)}</div>`;
+    resultEl.innerHTML = '<span class="spinner"></span>分析中（1/2）...';
+    const text1 = await callAI(prompt1, 800);
+    resultEl.innerHTML = '<span class="spinner"></span>分析中（2/2）...';
+    const text2 = await callAI(prompt2, 800);
+    const combined = '【発達段階・疾患の視点】\n' + text1 + '\n\n【S・Oからの分析とヒント】\n' + text2;
+    resultEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(combined)}</div>`;
   } catch(e) {
     resultEl.innerHTML = `<span style="color:#c17f5a">${escHtml(e.message||'通信エラーが発生しました。再度お試しください。')}</span>`;
   }
@@ -827,39 +890,30 @@ async function runPlan() {
   if(!disease) { showToast('主疾患を入力してください'); return; }
 
   const planEl = document.getElementById('aiPlanResult');
-  planEl.innerHTML = '<span class="spinner"></span>プラン生成中...';
+  planEl.innerHTML = '<span class="spinner"></span>プラン生成中（1/2）...';
 
   const dev = getDevStage(document.getElementById('inputAge').value);
+  const age = document.getElementById('inputAge').value || '不明';
+  const aData = document.getElementById('soapA').value || '未入力';
+  const sData = document.getElementById('soapS').value || '未入力';
+  const oData = document.getElementById('soapO').value || '未入力';
+  const devStage = dev ? dev.stage : '不明';
 
-  const prompt = `あなたは看護教育の専門家です。看護学生がSOAPのプラン（P）を自分で立案できるよう、具体的な看護計画案を提案してください。
+  const prompt1 = `看護学生の実習です。以下の情報から【Op（観察計画）】と【Tp（援助計画）】を各3項目、箇条書きで提案してください。
+患者：${age}歳 ${disease} 発達段階：${devStage}
+A：${aData}
+S：${sData} O：${oData}`;
 
-【患者情報】
-年齢：${document.getElementById('inputAge').value||'不明'}歳　主疾患：${disease}
-発達段階：${dev ? dev.stage : '不明'}
-
-【アセスメント（A）】
-${document.getElementById('soapA').value||'（未入力）'}
-
-【参考：S・O情報】
-S：${document.getElementById('soapS').value||'未入力'}
-O：${document.getElementById('soapO').value||'未入力'}
-
-以下の形式で看護計画案を提案してください。各項目は3〜5項目の箇条書きで、学生が実践できる具体的な内容にしてください。
-
-【Op（観察計画）】
-何を・どのくらいの頻度で観察するか
-
-【Tp（援助計画）】
-どのようなケアや介助を行うか
-
-【Ep（教育計画）】
-患者・家族にどのような説明・指導をするか
-
-最後に「※この計画案はあくまでも参考です。患者の状況に応じて、指導者と相談しながら修正してください。」と記載してください。`;
+  const prompt2 = `看護学生の実習です。以下の情報から【Ep（教育計画）】を3項目、箇条書きで提案してください。最後に1文で注意事項を添えてください。
+患者：${age}歳 ${disease} 発達段階：${devStage}
+A：${aData}`;
 
   try {
-    const text = await callAI(prompt, 3000);
-    planEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(text)}</div>`;
+    const text1 = await callAI(prompt1, 800);
+    planEl.innerHTML = '<span class="spinner"></span>プラン生成中（2/2）...';
+    const text2 = await callAI(prompt2, 400);
+    const combined = text1 + '\n\n' + text2;
+    planEl.innerHTML = `<div style="white-space:pre-wrap;line-height:1.9;font-size:.84rem;">${escHtml(combined)}</div>`;
   } catch(e) {
     planEl.innerHTML = `<span style="color:#c17f5a">${escHtml(e.message||'通信エラーが発生しました。')}</span>`;
   }
@@ -1190,8 +1244,10 @@ const PROVIDERS = {
   openai: {
     label: 'OpenAI APIキー',
     models: [
-      {value:'gpt-4o',      label:'GPT-4o（高精度）'},
-      {value:'gpt-4o-mini', label:'GPT-4o mini（高速・低コスト）'},
+      {value:'gpt-5',        label:'GPT-5（最高精度）'},
+      {value:'gpt-5-mini',   label:'GPT-5 mini（高速・低コスト）'},
+      {value:'gpt-4o',       label:'GPT-4o（旧世代・安定）'},
+      {value:'gpt-4o-mini',  label:'GPT-4o mini（旧世代・軽量）'},
     ],
     info: '<a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a> でAPIキーを取得できます。',
     placeholder: 'sk-...',
@@ -1303,67 +1359,133 @@ async function callAI(prompt, maxTokens = 3000) {
   const { provider, model, apiKey } = aiSettings;
   if (!apiKey) throw new Error('APIキーが設定されていません。「AI設定」タブで設定してください。');
 
-  // --- Google Gemini ---
-  if (provider === 'gemini') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens }
-      })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'レスポンスが空でした';
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('タイムアウト（60秒）しました。回線状況を確認して再度お試しください。')), 60000)
+  );
+
+  async function doFetch() {
+    let res, data;
+
+    // --- Google Gemini ---
+    if (provider === 'gemini') {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 }
+        })
+      });
+      data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || 'レスポンスが空でした';
+    }
+
+    // --- OpenAI ---
+    if (provider === 'openai') {
+      res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+      });
+      data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return data.choices?.[0]?.message?.content || 'レスポンスが空でした';
+    }
+
+    // --- Anthropic ---
+    if (provider === 'anthropic') {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+      });
+      data = await res.json();
+      if (data.error) throw new Error(data.error.error?.message || JSON.stringify(data.error));
+      return data.content?.map(c => c.text || '').join('') || 'レスポンスが空でした';
+    }
+
+    // --- OpenRouter ---
+    if (provider === 'openrouter') {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://nurse-techo.app',
+          'X-Title': 'ナース手帖'
+        },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+      });
+      data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      return data.choices?.[0]?.message?.content || 'レスポンスが空でした';
+    }
+
+    throw new Error('不明なプロバイダーです');
   }
 
-  // --- OpenAI ---
-  if (provider === 'openai') {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.choices?.[0]?.message?.content || 'レスポンスが空でした';
-  }
-
-  // --- Anthropic ---
-  if (provider === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.error?.message || JSON.stringify(data.error));
-    return data.content?.map(c => c.text || '').join('') || 'レスポンスが空でした';
-  }
-
-  // --- OpenRouter ---
-  if (provider === 'openrouter') {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://nurse-techo.app',
-        'X-Title': 'ナース手帖'
-      },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return data.choices?.[0]?.message?.content || 'レスポンスが空でした';
-  }
-
-  throw new Error('不明なプロバイダーです');
+  return Promise.race([doFetch(), timeout]);
 }
 
 // ===== nav override for settings =====
+
+
+// ===== バイタル toggle =====
+const vToggleState = { Irr: 'なし', O2: 'なし' };
+function setToggle(key, val) {
+  vToggleState[key] = val;
+  const ids = key === 'Irr' ? ['vtIrr0','vtIrr1'] : ['vtO20','vtO21'];
+  const vals = ['なし','あり'];
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'vital-toggle' + (vals[i] === val ? (val === 'なし' ? ' active-none' : ' active-warn') : '');
+  });
+}
+
+function getVitalText() {
+  const sbp  = document.getElementById('vSBP')?.value;
+  const dbp  = document.getElementById('vDBP')?.value;
+  const hr   = document.getElementById('vHR')?.value;
+  const bt   = document.getElementById('vBT')?.value;
+  const spo2 = document.getElementById('vSpO2')?.value;
+  const rr   = document.getElementById('vRR')?.value;
+  const lines = [];
+  if (sbp || dbp) lines.push('血圧：' + (sbp||'?') + '/' + (dbp||'?') + ' mmHg');
+  if (hr)   lines.push('脈拍：' + hr + '/min　不整（' + vToggleState.Irr + '）');
+  if (bt)   lines.push('体温：' + bt + '℃');
+  if (spo2) lines.push('SpO2：' + spo2 + '%　酸素投与（' + vToggleState.O2 + '）');
+  if (rr)   lines.push('呼吸数：' + rr + '/min');
+  return lines.join('\n');
+}
+
+function setVitalFields(vitalText) {
+  // Parse saved vital text back to fields
+  if (!vitalText) return;
+  const lines = vitalText.split('\n');
+  lines.forEach(line => {
+    const bp = line.match(/血圧：(\d+)\/(\d+)/);
+    if (bp) { document.getElementById('vSBP').value = bp[1]; document.getElementById('vDBP').value = bp[2]; }
+    const hr = line.match(/脈拍：(\d+)/);
+    if (hr) {
+      document.getElementById('vHR').value = hr[1];
+      if (line.includes('不整（あり）')) setToggle('Irr','あり');
+      else setToggle('Irr','なし');
+    }
+    const bt = line.match(/体温：([\d.]+)/);
+    if (bt) document.getElementById('vBT').value = bt[1];
+    const spo2 = line.match(/SpO2：(\d+)/);
+    if (spo2) {
+      document.getElementById('vSpO2').value = spo2[1];
+      if (line.includes('酸素投与（あり）')) setToggle('O2','あり');
+      else setToggle('O2','なし');
+    }
+    const rr = line.match(/呼吸数：(\d+)/);
+    if (rr) document.getElementById('vRR').value = rr[1];
+  });
+}
 
 // ===== テキストエクスポート =====
 function recordToText(r) {
@@ -1453,43 +1575,7 @@ function downloadText(text, filename) {
 
 renderList();
 
-// ===== PWA: Service Worker (inline Blob) =====
-if ('serviceWorker' in navigator) {
-  const swCode = `
-    const CACHE = 'nurse-techo-v1';
-    self.addEventListener('install', e => {
-      self.skipWaiting();
-    });
-    self.addEventListener('activate', e => {
-      e.waitUntil(
-        caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-        )
-      );
-      self.clients.claim();
-    });
-    self.addEventListener('fetch', e => {
-      if (e.request.method !== 'GET') return;
-      e.respondWith(
-        caches.match(e.request).then(cached => {
-          if (cached) return cached;
-          return fetch(e.request).then(res => {
-            if (res && res.status === 200) {
-              const clone = res.clone();
-              caches.open(CACHE).then(c => c.put(e.request, clone));
-            }
-            return res;
-          }).catch(() => cached);
-        })
-      );
-    });
-  `;
-  const blob = new Blob([swCode], { type: 'application/javascript' });
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl).then(reg => {
-    console.log('SW registered (inline)');
-  }).catch(err => console.log('SW skipped:', err));
-}
+// Service Worker: 独自サーバーへデプロイ時のみ有効（このHTML単体では不要）
 
 // ===== PWA: Install Prompt =====
 let deferredPrompt = null;
